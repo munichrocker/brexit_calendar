@@ -2,17 +2,21 @@ library(tidyverse)
 library(lubridate)
 library(extrafont)
 
-setwd("~/Documents/BBC/brexit_calendar")
+# load prerequistes
 
 font_family <- "SZSansDigital"
 font_family_light <- "SZSansDigital Light"
-nudge_x_preset <- 3 # make it 3 for mobile plot
+nudge_x_preset <- 2 # make it 3 for mobile plot
+
+color_code <- c("Parlament tagt" = "#019bd4", "Parlament tagt nicht" = "#aed5e7", 
+                "Parlament suspendiert" = "#f8d770", "Austrittstermin" = "#dd5045")
+
+# load data, transform as Date
 
 calendar_data <- read.csv("brexit_calender.csv")
 calendar_data$date <- as.Date(calendar_data$date, format = "%d.%m.%y")
 
-color_code <- c("Parlament tagt" = "#019bd4", "Parlament tagt nicht" = "#aed5e7", 
-                "Parlament suspendiert" = "#f8d770", "Austrittstermin" = "#dd5045")
+# Calculate different values from the data
 
 calendar_data %>% 
   mutate(weekday = weekdays(date, abbreviate = TRUE),
@@ -20,6 +24,8 @@ calendar_data %>%
          day = str_extract(date, "\\d+$"),
          day_label = format(date, "%d. %b."),
          category = factor(category, levels = c("Parlament tagt", "Parlament tagt nicht", "Parlament suspendiert", "Austrittstermin"))) -> calendar_data
+
+# create plot without annotations, that we can later build on top
 
 plot <- ggplot(calendar_data, aes(weekday, week_num, fill = category)) +
   geom_tile(aes(fill = category), color = "white") + 
@@ -38,9 +44,11 @@ plot <- ggplot(calendar_data, aes(weekday, week_num, fill = category)) +
         axis.ticks = element_blank())
 
 # prepare labels
-# for each label we have: one geom_text with date, one geom_text with text, two geom segments, one straight line, one vertical line
+
 calendar_data %>% 
   filter(text != "") -> calendar_labels
+
+# loop over labels and add them to plot with lines
 
 for (i in 1:nrow(calendar_labels)) {
   current_row <- calendar_labels[i,]
@@ -76,7 +84,11 @@ for (i in 1:nrow(calendar_labels)) {
   }
 }
 
+# print finished plot
+
 plot
+
+# save plot for desktop and mobile
 
 ggsave(filename = "desktop.png", dpi = 144, width = 8.89, height = 6)
 
