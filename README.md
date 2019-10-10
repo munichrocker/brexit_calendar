@@ -12,7 +12,7 @@ I was trying to recreate that calendar in a form that stays flexible for other u
 
 ### Generally
 
-The calendar is drawn from a csv which contains the whole month we want to show. The data comes int he following form:
+The calendar is drawn from a csv which contains the whole month we want to show. The data comes in the following form:
 
 | date     | category              | text                   | text_kalenderwoche | pfeil_kalenderwoche | pfeil_day_of_week |
 |----------|-----------------------|------------------------|--------------------|---------------------|-------------------|
@@ -43,3 +43,89 @@ These lines have been extracted to provide as an example for the lines.
 | 08.10.19 | Parlament tagt        | Parlament suspendiert  | 40                 | 41                  | 2                 |
 | 19.10.19 | Parlament tagt        | Sondersitzung          | 43                 | 42                  | 6                 |
 | 31.10.19 | Austrittstermin       | geplantes Brexit-Datum | 44                 | 44                  | 4                 |
+
+## The script
+
+Is basically self-explanatory.
+
+We first load the data from the csv and create some new variables from the dates that we need for plotting:
+
+```
+calendar_data %>% 
+  mutate(weekday = weekdays(date, abbreviate = TRUE),
+         week_num = isoweek(date),
+         day = str_extract(date, "\\d+$"),
+         day_label = format(date, "%d. %b."),
+         category = factor(category, levels = c("Parlament tagt", "Parlament tagt nicht", "Parlament suspendiert", "Austrittstermin"))) -> calendar_data
+```
+
+We then create a simple ggplot with `geom_tile()`, until now without any annotations.
+
+```
+plot <- ggplot(calendar_data, aes(weekday, week_num, fill = category)) +
+  geom_tile(aes(fill = category), color = "white") + 
+  scale_x_discrete(limits = c("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")) +
+  scale_y_reverse(breaks = NULL) +
+  scale_fill_manual(values = color_code) +
+  coord_cartesian(clip = "off") +
+  theme(panel.background = element_blank(),
+        plot.margin = margin(1, 15, 1, 1, unit = "lines"),
+        legend.position = c(0,1),
+        legend.title = element_blank(),
+        legend.direction = "horizontal",
+        legend.margin = margin(20, 0, 20, 400),
+        axis.title = element_blank(),
+        axis.text = element_text(family = font_family_light),
+        axis.ticks = element_blank())
+```
+
+These annotations will be added in the for loop. It adds `geom_text()` with the dates and labels and `geom_segment()` for the lines to the plot - one after another. The script recognizes, if the values in `text_kalenderwoche` and `pfeil_kalenderwoche` differ and will adapt the line accordingly.
+
+```
+calendar_data %>% 
+  filter(text != "") -> calendar_labels
+
+# loop over labels and add them to plot with lines
+
+for (i in 1:nrow(calendar_labels)) {
+  current_row <- calendar_labels[i,]
+  
+  print(current_row$day_label)
+  
+  plot +
+    geom_text(aes_(x = 8, y = current_row$text_kalenderwoche, label = current_row$day_label, hjust = 0, family = font_family, fontface = "bold"), nudge_x = 0.5) +
+    geom_text(aes_(x = 8, y = current_row$text_kalenderwoche, label = current_row$text, hjust = 0, family = font_family_light), nudge_x = nudge_x_preset) -> plot
+  
+  if (current_row$pfeil_kalenderwoche > current_row$text_kalenderwoche) {
+    print("Kalenderwoche > Textwoche")
+    
+    plot +
+      geom_segment(aes_(x = 8, y = current_row$text_kalenderwoche, xend = current_row$pfeil_day_of_week, yend = current_row$text_kalenderwoche), colour = "#000000", size = 0.5) +
+      geom_segment(aes_(x = current_row$pfeil_day_of_week, y = current_row$text_kalenderwoche, xend = current_row$pfeil_day_of_week, yend = (current_row$text_kalenderwoche + 0.75)), colour = "#000000", size = 0.5) -> plot
+    
+  } else if (current_row$pfeil_kalenderwoche < current_row$text_kalenderwoche) {
+    
+    print("Kalenderwoche < Textwoche")
+    
+    plot +
+      geom_segment(aes_(x = 8, y = current_row$text_kalenderwoche, xend = current_row$pfeil_day_of_week, yend = current_row$text_kalenderwoche), colour = "#000000", size = 0.5) +
+      geom_segment(aes_(x = current_row$pfeil_day_of_week, y = current_row$text_kalenderwoche, xend = current_row$pfeil_day_of_week, yend = (current_row$text_kalenderwoche - 0.75)), colour = "#000000", size = 0.5) -> plot
+    
+    
+  } else {
+    print("Kalenderwoche = Textwoche")
+    
+    plot +
+      geom_segment(aes_(x = 8, y = current_row$text_kalenderwoche, xend = current_row$pfeil_day_of_week, yend = current_row$pfeil_kalenderwoche), colour = "#000000", size = 0.5) -> plot
+    
+  }
+}
+```
+
+## Roadmap
+
+This plot hasn't been tested with multiple months yet.
+
+If it will be deployed for multiple projects it might be worth to adapt the function to place the labels based on the dates, not Week and day numbers.
+
+
